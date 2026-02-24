@@ -9,6 +9,18 @@
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 body{font-family:system-ui,-apple-system,sans-serif;background:#fafafa;color:#222;line-height:1.4}
 
+/* --- Force readable colors regardless of Telegram theme (Mini App) --- */
+:root{
+  --mm-bg:#fafafa;
+  --mm-text:#222;
+  --mm-panel:#fff;
+  --mm-border:#e0e0e0;
+}
+body{background:var(--mm-bg);color:var(--mm-text)}
+.header,.modal-box,.top-marker,.queue-box,.profession-bar{background:var(--mm-panel)}
+.header{border-bottom:1px solid var(--mm-border)}
+.queue-box,.profession-bar{border:1px solid var(--mm-border)}
+
 /* Header */
 .header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff;border-bottom:1px solid #e0e0e0;position:sticky;top:0;z-index:10}
 .header h1{font-size:18px;font-weight:600}
@@ -770,20 +782,17 @@ function loadProfession() {
 var isTelegramWebApp = false;
 
 function initTelegramWebApp() {
+  // Detect true Mini App mode.
+  // Outside Telegram, the SDK script exists but window.Telegram.WebApp is missing.
   if (window.Telegram && window.Telegram.WebApp) {
     var tgApp = window.Telegram.WebApp;
     isTelegramWebApp = true;
 
-    // Signal readiness
     tgApp.ready();
     tgApp.expand();
 
-    // Apply Telegram theme if available
-    var tp = tgApp.themeParams;
-    if (tp) {
-      if (tp.bg_color) document.body.style.background = tp.bg_color;
-      if (tp.text_color) document.body.style.color = tp.text_color;
-    }
+    // IMPORTANT: do NOT override page colors from Telegram theme.
+    // We keep our own fixed light theme for readability.
 
     // In Mini App mode: hide "Save YAML" download, show "Submit to Bot"
     var saveBtn = document.getElementById("saveYamlBtn");
@@ -799,15 +808,34 @@ function initTelegramWebApp() {
 }
 
 function submitToBot() {
+  // Visual feedback even if sendData fails or is ignored
+  var btn = document.getElementById("submitBotBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Отправляю...";
+  }
+
   if (!window.Telegram || !window.Telegram.WebApp) {
-    alert("Эта функция доступна только в Telegram Mini App.");
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📤 Отправить в бот";
+      // hide again (since we are not in Mini App)
+      btn.classList.remove("visible");
+    }
+    alert("Отправка доступна только внутри Telegram Mini App.\n\nОткройте страницу через кнопку в /start.");
     return;
   }
 
   var yamlText = generateYAML();
   try {
     window.Telegram.WebApp.sendData(yamlText);
+    // Telegram does not show anything automatically; close the webapp for clarity
+    window.Telegram.WebApp.close();
   } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📤 Отправить в бот";
+    }
     alert("Ошибка отправки: " + e.message);
   }
 }
