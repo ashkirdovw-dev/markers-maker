@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Markers Maker</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:system-ui,-apple-system,sans-serif;background:#fafafa;color:#222;line-height:1.4}
+
+/* --- Force readable colors regardless of Telegram theme (Mini App) --- */
+:root{
+  --mm-bg:#fafafa;
+  --mm-text:#222;
+  --mm-panel:#fff;
+  --mm-border:#e0e0e0;
+}
+body{background:var(--mm-bg);color:var(--mm-text)}
+.header,.modal-box,.top-marker,.queue-box,.profession-bar{background:var(--mm-panel)}
+.header{border-bottom:1px solid var(--mm-border)}
+.queue-box,.profession-bar{border:1px solid var(--mm-border)}
+
+/* Header */
+.header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#fff;border-bottom:1px solid #e0e0e0;position:sticky;top:0;z-index:10}
+.header h1{font-size:18px;font-weight:600}
+.help-btn{background:none;border:1px solid #999;border-radius:50%;width:32px;height:32px;font-size:16px;cursor:pointer;color:#555}
+
+/* Modal */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.4);z-index:100;align-items:center;justify-content:center;padding:20px}
+.modal-overlay.open{display:flex}
+.modal-box{background:#fff;border-radius:10px;padding:24px;max-width:500px;width:100%;max-height:80vh;overflow-y:auto}
+.modal-box h2{margin-bottom:12px;font-size:18px}
+.modal-box p{margin-bottom:10px;font-size:14px;line-height:1.5}
+.modal-close{display:block;margin:16px auto 0;padding:8px 24px;border:none;background:#1976d2;color:#fff;border-radius:6px;cursor:pointer;font-size:15px}
+
+/* Layout */
+.main{max-width:800px;margin:0 auto;padding:12px}
+
+/* Top marker */
+.top-marker{background:#fff;border:2px solid #2196f3;border-radius:8px;padding:14px 16px;text-align:center;margin-bottom:10px;transition:background .15s}
+.top-marker .label{font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px}
+.top-marker .marker-text{font-size:22px;font-weight:700;margin-top:2px;min-height:30px}
+.top-marker .marker-cat{font-size:11px;color:#999;margin-top:2px}
+.top-marker.empty{border-color:#ccc}
+.top-marker.empty .marker-text{color:#aaa;font-size:16px;font-weight:400}
+.top-marker.flash{background:#e3f2fd}
+
+/* Counter */
+.counter{text-align:center;font-size:13px;color:#888;margin-bottom:10px}
+
+/* Button grid */
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.btn-grid button{font-size:15px;font-weight:600;padding:14px 6px;border:none;border-radius:8px;cursor:pointer;touch-action:manipulation;color:#fff;transition:opacity .1s;line-height:1.3}
+.btn-grid button:active{opacity:.8}
+.btn-grid button:disabled{opacity:.35;cursor:default}
+.btn-grid .blbl{font-size:20px;font-weight:700;display:block}
+.btn-grid .bsub{font-size:10px;opacity:.85;display:block}
+.btn-neg1{background:#ffb74d;color:#4e2700}
+.btn-pos1{background:#81c784;color:#1b3a1c}
+.btn-neg2{background:#e65100}
+.btn-pos2{background:#2e7d32}
+.btn-ign{background:#c62828}
+.btn-nc{background:#9e9e9e}
+
+/* Queue */
+.section-hdr{font-size:14px;font-weight:600;padding:10px 0 4px;color:#555;display:flex;justify-content:space-between;align-items:center;cursor:pointer;user-select:none}
+.section-hdr .tgl{font-size:12px;color:#999}
+.queue-box{background:#fff;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:16px;max-height:340px;overflow-y:auto}
+.queue-box.collapsed{display:none}
+.qcat{padding:0 12px}
+.qcat-name{font-size:11px;font-weight:600;color:#999;padding:8px 0 3px;text-transform:uppercase;letter-spacing:.3px;border-bottom:1px solid #f0f0f0}
+.qitem{font-size:14px;padding:5px 0;border-bottom:1px solid #f7f7f7}
+.qitem:last-child{border-bottom:none}
+.qitem.top{font-weight:700;color:#1976d2}
+
+/* Groups */
+.grp{margin-bottom:10px}
+.grp-hdr{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;user-select:none}
+.grp-hdr .cnt{background:rgba(0,0,0,.12);border-radius:10px;padding:1px 8px;font-size:11px;min-width:22px;text-align:center}
+.grp-body{padding:4px 8px}
+.grp-body.hidden{display:none}
+.gtag{display:inline-flex;align-items:center;gap:3px;padding:3px 7px;margin:2px;border-radius:4px;font-size:13px;background:#f5f5f5;border:1px solid #e0e0e0}
+.gtag .rb{background:none;border:none;cursor:pointer;font-size:15px;color:#b00;padding:0 2px;line-height:1;touch-action:manipulation}
+
+/* Group header colors */
+.gh-excellent{background:#e8f5e9;color:#1b5e20}
+.gh-acceptable{background:#f1f8e9;color:#33691e}
+.gh-negative{background:#fff3e0;color:#e65100}
+.gh-strong_negative{background:#fbe9e7;color:#bf360c}
+.gh-ignore{background:#ffebee;color:#b71c1c}
+.gh-notcount{background:#f5f5f5;color:#616161}
+
+/* Bottom buttons */
+.save-btn{display:block;width:100%;padding:16px;font-size:17px;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:#1976d2;color:#fff;margin:16px 0 8px;touch-action:manipulation}
+.save-btn:active{opacity:.85}
+.reset-btn{display:block;width:100%;padding:10px;font-size:13px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;background:#fff;color:#c00;margin-bottom:32px}
+.preset-btn{display:block;width:100%;padding:10px;font-size:13px;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;background:#fff;color:#1b5e20;margin-bottom:8px}
+
+/* Profession selector */
+.profession-bar{background:#fff;border:1px solid #e0e0e0;border-radius:8px;padding:12px 16px;margin-bottom:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.profession-bar label{font-size:13px;font-weight:600;color:#555;white-space:nowrap}
+.profession-bar select{flex:1;min-width:140px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;background:#fff;color:#222}
+.profession-bar input[type="text"]{flex:1;min-width:120px;padding:8px 10px;border:1px solid #ccc;border-radius:6px;font-size:14px;display:none}
+.profession-bar input[type="text"].visible{display:block}
+
+/* Submit button (Mini App only, hidden by default) */
+.submit-btn{display:none;width:100%;padding:16px;font-size:17px;font-weight:600;border:none;border-radius:8px;cursor:pointer;background:#27ae60;color:#fff;margin:8px 0;touch-action:manipulation}
+.submit-btn:active{opacity:.85}
+.submit-btn.visible{display:block}
+
+/* Desktop two-column */
+@media(min-width:900px){
+  .main{max-width:1100px}
+  .desktop-wrap{display:grid;grid-template-columns:1fr 1fr;gap:24px;align-items:start}
+  .left-col{position:sticky;top:60px}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Markers Maker</h1>
+  <button class="help-btn" onclick="toggleHelp()" title="Справка">?</button>
+</div>
+
+<!-- Help modal -->
+<div class="modal-overlay" id="helpModal">
+  <div class="modal-box">
+    <h2>Как пользоваться</h2>
+    <p>Эта страница помогает распределить маркеры по группам для конфигурации JobWatcher scoring.</p>
+    <p><b>Текущий маркер</b> отображается в верхней карточке. Нажимайте кнопки, чтобы отправить его в нужную группу:</p>
+    <p>
+      <b>+2</b> — excellent (отличный маркер, высший приоритет)<br>
+      <b>+1</b> — acceptable (приемлемый маркер)<br>
+      <b>−1</b> — negative (нежелательный)<br>
+      <b>−2</b> — strong negative (крайне нежелательный)<br>
+      <b>ignore</b> — игнорировать при скоринге<br>
+      <b>not count</b> — не учитывать (не попадёт в YAML)
+    </p>
+    <p>Маркеры из любой группы можно вернуть обратно в очередь нажатием кнопки <b>×</b> рядом с маркером. Возвращённый маркер появится в начале своей категории.</p>
+    <p>Когда распределение завершено, нажмите <b>💾&nbsp;Сохранить YAML</b> внизу страницы — файл скачается автоматически.</p>
+    <p>Прогресс сохраняется автоматически в браузере между перезагрузками страницы.</p>
+    <h3>Как работает итоговая выдача</h3>
+    <p></p>
+    <p><u>Все посты</u> все равно будут доступны в своих группах после скоринга (и посчитаны, кроме "пропущенных" - которые не содержат упоминания профессии в известных вариациях)</p>
+    <p>Это значит, что ошибаться можно, тем более что формат у вакансий обычно весьма свободный и всего не предскажешь.</p>
+    <p>Посты, набравшие очков в определенных диапазонах, попадут в свои группы. "Проигнорированные" тоже, но по ним не будет подсчета</p>
+    
+    <h3>Из каких соображений распределять по группам</h3>
+    <p></p>
+    <p>Рекомендуемая логика распределени базируется на предпочтениях и навыках, и она следующая:</p>
+    <p><b>"отличные"</b> маркеры - есть опыт, есть желание, считаю что должен этим заниматься</p>
+    <p><b>"приемлемые"</b> - есть опыт, но нет желания, или наоборот, или не уверен, или "почему бы и нет"</p>
+    <p><b>"нежелательные"</b> - согласен если придется, но хотел бы избежать. Неуверенный опыт. </p>
+    <p><b>"очень нежелательные"</b> - не хочу, нет опыта, не пройду собеседование если спросят. Маркер который является сильным сигналом что вакансию рассматривать в последнюю очередь </p>
+    <p><b>"игнорировать"</b> - не стоит даже рассматривать, например gamedev-вакансии или блокчейн </p>
+    <p><b>"не учитывать"</b> - для маркеров, которые, вы не хотите, чтобы влияли на счёт или по которым нет мнения.</p>
+    <p><b>"пропущено"</b> - скрытая итоговая группа после распределения; маркеры в нее распределить нельзя, но в такую группу в итоге попадут посты, не содержащие вариации названия вакансии (например "тестировщик", "qa" и "инженер по тестированию") нигде в тексте. такие посты не подсчитываются, как и "игнорируемые", но также будут доступны на случай ложного срабатывания</p>
+    <p>Стоит учесть, что даже слово "реклама" может быть в названии "компании" ("Городская реклама"), крипта может быть способом выплаты зарплаты и т.п. Таких случаев мало, но формата у вакансий в телеграм нет. Если будет много ложных срабатываний, смягчите или ужесточите конфиг </p>
+    <p><b>Важно:</b> некоторые маркеры уже распределены. Удалите их из групп, если вам не подходит </p>
+    <button class="modal-close" onclick="toggleHelp()">Понятно</button>
+  </div>
+</div>
+
+<div class="main">
+  <div class="desktop-wrap">
+
+    <!-- Left column: profession selector, top marker, buttons, queue -->
+    <div class="left-col">
+
+      <div class="profession-bar" id="professionBar">
+        <label for="professionSelect">Профессия:</label>
+        <select id="professionSelect" onchange="onProfessionChange()">
+          <option value="qa" selected>QA</option>
+          <option value="java">Java</option>
+          <option value="python">Python</option>
+          <option value="devops">DevOps</option>
+          <option value="other">Другое…</option>
+        </select>
+        <input type="text" id="professionCustom" placeholder="Введите название"
+               oninput="onProfessionCustomInput()">
+      </div>
+
+      <div class="top-marker" id="topMarker">
+        <div class="label">Текущий маркер</div>
+        <div class="marker-text" id="topText">—</div>
+        <div class="marker-cat" id="topCat"></div>
+      </div>
+
+      <div class="counter" id="counter"></div>
+
+      <div class="btn-grid">
+        <button class="btn-neg1" onclick="assignTop('negative')"><span class="blbl">−1</span><span class="bsub">нежелательны</span></button>
+        <button class="btn-pos1" onclick="assignTop('acceptable')"><span class="blbl">+1</span><span class="bsub">приемлемы</span></button>
+        <button class="btn-neg2" onclick="assignTop('strong_negative')"><span class="blbl">−2</span><span class="bsub">очень нежелательны</span></button>
+        <button class="btn-pos2" onclick="assignTop('excellent')"><span class="blbl">+2</span><span class="bsub">отличные</span></button>
+        <button class="btn-ign" onclick="assignTop('ignore')"><span class="blbl">игнорировать</span></button>
+        <button class="btn-nc" onclick="assignTop('notcount')"><span class="blbl">не учитывать</span></button>
+      </div>
+
+      <div>
+        <div class="section-hdr" onclick="toggleQueue()">
+          <span>Очередь маркеров</span>
+          <span class="tgl" id="queueTgl">▼</span>
+        </div>
+        <div class="queue-box" id="queue"></div>
+      </div>
+
+    </div>
+
+    <!-- Right column: groups, save -->
+    <div class="right-col">
+      <div id="groups"></div>
+      <button class="save-btn" id="saveYamlBtn" onclick="exportYAML()">💾 Сохранить YAML</button>
+      <button class="submit-btn" id="submitBotBtn" onclick="submitToBot()">📤 Отправить в бот</button>
+      <button class="preset-btn" onclick="applyPresets()">Применить пресеты</button>
+      <button class="reset-btn" onclick="resetAll()">Сбросить всё</button>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   SOURCE DATA  — from plans_readme/list of markers.txt
+   ================================================================ */
+const CATEGORIES = [
+  { name: "Специализация и роли", markers: [
+    "backend","backend developer","frontend developer","fullstack","full stack",
+    "quality assurance","automation engineer","test automation","aqa",
+    "functional testing","manual","автоматизация","автотест",
+    "автоматизированное","qa engineer","test lead","automation qa"
+  ]},
+  { name: "API и связанные технологии", markers: [
+    "api","rest","soap","swagger","postman","api testing","graphql"
+  ]},
+  { name: "Инфраструктура, окружение, ОС", markers: [
+    "linux","grafana","charles","kafka","prometheus","kubernetes","windows"
+  ]},
+  { name: "Системы контроля версий и devtools", markers: [
+    "git","gitlab","devtools","maven","gradle","docker","teamcity",
+    "jenkins","github actions","sonarqube"
+  ]},
+  { name: "Базы данных", markers: [
+    "postgress","postrgressql","sqlite","mysql","mongodb","redis","oracle"
+  ]},
+  { name: "Языки программирования", markers: [
+    "java","python","c#","kotlin","javascript","typescript","sql",
+    "1с","ruby","go","php","swift"
+  ]},
+  { name: "Фреймворки и инструменты автоматизации тестирования", markers: [
+    "selenium","junit","jmeter","restassured","allure","cypress","pytest",
+    "playwright","webdriver","testng","cucumber","robot framework"
+  ]},
+  { name: "Методологии и процессы разработки", markers: [
+    "agile","scrum","kanban","ci/cd","waterfall","tdd","bdd"
+  ]},
+  { name: "Грейд (уровень специалиста)", markers: [
+    "intern","стажировка","trainee","junior","middle","senior","lead"
+  ]},
+  { name: "Формат работы", markers: [
+    "freelance","contract","part-time","full-time","remote","office"
+  ]},
+  { name: "Тематика домена", markers: [
+    "gaming","game","gamedev","крипто","crypto","pentester","pentest",
+    "fintech","ecommerce","healthcare", "gambling"
+  ]},
+  { name: "other", markers: [
+    "подборка","реклама","урок","эфир","вебинар"
+  ]}
+];
+
+/* Group definitions — order matches YAML output */
+const GROUP_DEFS = [
+  { key:"excellent",       yaml:"excellent_markers",       label:"+2 Отличные",  css:"gh-excellent" },
+  { key:"acceptable",      yaml:"acceptable_markers",      label:"+1 Приемлемы", css:"gh-acceptable" },
+  { key:"negative",        yaml:"negative_markers",        label:"−1 Нежелательны",   css:"gh-negative" },
+  { key:"strong_negative", yaml:"strong_negative_markers", label:"−2 Очень нежелательны", css:"gh-strong_negative" },
+  { key:"ignore",          yaml:"ignore_markers",          label:"Игнорировать",        css:"gh-ignore" },
+  { key:"notcount",        yaml:null,                      label:"Не учитывать",     css:"gh-notcount" }
+];
+
+/* ================================================================
+   PRESETS (optional) — pre-assign specific markers to groups
+   
+   Notes:
+   - Keys are exact marker strings.
+   - Values are internal group keys: excellent | acceptable | negative | strong_negative | ignore | notcount
+   - Presets are applied on fresh init and can be re-applied via the button.
+   ================================================================ */
+// Presets can be written in 2 convenient forms:
+//
+// 1) marker -> groupKey (as before):
+//    { "qa engineer": "excellent", "api": "acceptable" }
+//
+// 2) groupKey -> [markers...] (so you don't repeat the groupKey):
+//    { excellent: ["qa engineer", "automation qa"], acceptable: ["api", "rest"] }
+//
+// You can also mix both forms in the same object.
+const PREASSIGN_INPUT = {
+  excellent: ["qa engineer"],
+  acceptable: ["api"],
+  negative: ["c#"],
+  strong_negative: ["gambling","crypto"],
+  ignore: ["freelance"]
+};
+
+const PREASSIGN_MARKERS = (function buildPreassignMarkers(input) {
+  const out = Object.create(null);
+
+  function isGroupKey(k) {
+    return k === "excellent" || k === "acceptable" || k === "negative" ||
+      k === "strong_negative" || k === "ignore" || k === "notcount";
+  }
+
+  function add(marker, groupKey) {
+    const m = (marker || "").trim();
+    if (!m) return;
+    out[m] = groupKey;
+  }
+
+  for (const [k, v] of Object.entries(input || {})) {
+    if (isGroupKey(k)) {
+      // groupKey -> markers
+      if (Array.isArray(v)) {
+        for (const marker of v) add(marker, k);
+      } else if (typeof v === "string") {
+        add(v, k);
+      }
+      continue;
+    }
+
+    // marker -> groupKey
+    if (typeof v === "string" && isGroupKey(v)) add(k, v);
+  }
+
+  return out;
+})(PREASSIGN_INPUT);
+
+/* ================================================================
+   STATE
+   ================================================================ */
+const state = {
+  unassigned: {},   // categoryName → [marker strings] in display order
+  groups: {},       // groupKey → [marker strings]
+  markerCat: {}     // marker → original categoryName  (never changes)
+};
+
+let queueOpen = true;
+
+/* ---- Build static marker→category map ---- */
+function buildCatMap() {
+  state.markerCat = {};
+  const seen = new Set();
+  for (const cat of CATEGORIES) {
+    for (const raw of cat.markers) {
+      const m = raw.trim();
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      state.markerCat[m] = cat.name;
+    }
+  }
+}
+
+/* ---- Fresh init (first visit or after reset) ---- */
+function initState() {
+  buildCatMap();
+  state.groups = { excellent:[], acceptable:[], negative:[], strong_negative:[], ignore:[], notcount:[] };
+  state.unassigned = {};
+  const seen = new Set();
+  for (const cat of CATEGORIES) {
+    state.unassigned[cat.name] = [];
+    for (const raw of cat.markers) {
+      const m = raw.trim();
+      if (!m || seen.has(m)) continue;
+      seen.add(m);
+      if (cat.name === "other") {
+        state.groups.ignore.push(m);
+      } else {
+        state.unassigned[cat.name].push(m);
+      }
+    }
+  }
+
+  // Apply presets after base placement (including the mandatory other→ignore rule).
+  applyPresets(false);
+}
+
+function isValidGroupKey(groupKey) {
+  return groupKey === "excellent" || groupKey === "acceptable" || groupKey === "negative" ||
+    groupKey === "strong_negative" || groupKey === "ignore" || groupKey === "notcount";
+}
+
+function removeMarkerEverywhere(marker) {
+  // remove from groups
+  for (const k of Object.keys(state.groups)) {
+    const arr = state.groups[k];
+    const idx = arr.indexOf(marker);
+    if (idx !== -1) arr.splice(idx, 1);
+  }
+  // remove from unassigned
+  for (const cat of CATEGORIES) {
+    const arr = state.unassigned[cat.name] || [];
+    const idx = arr.indexOf(marker);
+    if (idx !== -1) arr.splice(idx, 1);
+  }
+}
+
+function applyPresets(saveAndRender) {
+  const saveRender = (saveAndRender !== false);
+
+  for (const markerRaw of Object.keys(PREASSIGN_MARKERS)) {
+    const marker = (markerRaw || "").trim();
+    const groupKey = PREASSIGN_MARKERS[markerRaw];
+    if (!marker || !isValidGroupKey(groupKey)) continue;
+    if (!state.markerCat[marker]) continue; // unknown marker
+
+    // Ensure strict dedupe: marker must exist in exactly one place.
+    removeMarkerEverywhere(marker);
+    state.groups[groupKey].push(marker);
+  }
+
+  // If presets are edited and applied mid-session, keep invariants.
+  if (!validateState()) {
+    // fallback: if something went wrong, rebuild from scratch
+    localStorage.removeItem("markers_maker_v1");
+    initState();
+    return;
+  }
+
+  if (saveRender) {
+    saveState();
+    render();
+  }
+}
+
+/* ---- Persist to localStorage ---- */
+function saveState() {
+  try {
+    localStorage.setItem("markers_maker_v1", JSON.stringify({
+      unassigned: state.unassigned,
+      groups: state.groups
+    }));
+  } catch (e) { /* ignore quota errors */ }
+}
+
+/* ---- Restore from localStorage ---- */
+function loadState() {
+  try {
+    const raw = localStorage.getItem("markers_maker_v1");
+    if (!raw) return false;
+    const d = JSON.parse(raw);
+    if (!d.unassigned || !d.groups) return false;
+    buildCatMap();
+    state.unassigned = {};
+    for (const cat of CATEGORIES) state.unassigned[cat.name] = d.unassigned[cat.name] || [];
+    const keys = ["excellent","acceptable","negative","strong_negative","ignore","notcount"];
+    state.groups = {};
+    for (const k of keys) state.groups[k] = d.groups[k] || [];
+    return validateState();
+  } catch (e) { return false; }
+}
+
+/* ---- Validate: every marker in exactly one place ---- */
+function validateState() {
+  const placed = new Set();
+  for (const cat of CATEGORIES) {
+    for (const m of (state.unassigned[cat.name] || [])) {
+      if (placed.has(m)) return false;
+      placed.add(m);
+    }
+  }
+  for (const k of Object.keys(state.groups)) {
+    for (const m of state.groups[k]) {
+      if (placed.has(m)) return false;
+      placed.add(m);
+    }
+  }
+  for (const m of Object.keys(state.markerCat)) {
+    if (!placed.has(m)) return false;
+  }
+  return true;
+}
+
+/* ================================================================
+   CORE LOGIC
+   ================================================================ */
+
+function getTopMarker() {
+  for (const cat of CATEGORIES) {
+    const list = state.unassigned[cat.name];
+    if (list && list.length > 0) return list[0];
+  }
+  return null;
+}
+
+function countUnassigned() {
+  let n = 0;
+  for (const cat of CATEGORIES) n += (state.unassigned[cat.name] || []).length;
+  return n;
+}
+
+function assignTop(groupKey) {
+  const top = getTopMarker();
+  if (!top) return;
+  const cat = state.markerCat[top];
+  state.unassigned[cat].shift();
+  state.groups[groupKey].push(top);
+  saveState();
+  flashTop();
+  render();
+}
+
+function returnMarker(marker, fromGroup) {
+  const idx = state.groups[fromGroup].indexOf(marker);
+  if (idx === -1) return;
+  state.groups[fromGroup].splice(idx, 1);
+  const cat = state.markerCat[marker];
+  if (!state.unassigned[cat]) state.unassigned[cat] = [];
+  state.unassigned[cat].unshift(marker);   // prepend → may become new top
+  saveState();
+  render();
+}
+
+/* ================================================================
+   RENDERING
+   ================================================================ */
+
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function render() {
+  renderTopMarker();
+  renderCounter();
+  renderQueue();
+  renderGroups();
+}
+
+function flashTop() {
+  const el = document.getElementById("topMarker");
+  el.classList.add("flash");
+  setTimeout(function() { el.classList.remove("flash"); }, 160);
+}
+
+function renderTopMarker() {
+  var top = getTopMarker();
+  var txt = document.getElementById("topText");
+  var cat = document.getElementById("topCat");
+  var box = document.getElementById("topMarker");
+  if (top) {
+    txt.textContent = top;
+    cat.textContent = state.markerCat[top];
+    box.classList.remove("empty");
+  } else {
+    txt.textContent = "Все маркеры распределены ✓";
+    cat.textContent = "";
+    box.classList.add("empty");
+  }
+  var btns = document.querySelectorAll(".btn-grid button");
+  for (var i = 0; i < btns.length; i++) btns[i].disabled = !top;
+}
+
+function renderCounter() {
+  var rem = countUnassigned();
+  var total = Object.keys(state.markerCat).length;
+  var done = total - rem;
+  document.getElementById("counter").textContent =
+    "Распределено: " + done + " / " + total + "  (осталось: " + rem + ")";
+}
+
+function renderQueue() {
+  var box = document.getElementById("queue");
+  box.innerHTML = "";
+  var isFirst = true;
+  var any = false;
+
+  for (var ci = 0; ci < CATEGORIES.length; ci++) {
+    var cat = CATEGORIES[ci];
+    var items = state.unassigned[cat.name];
+    if (!items || items.length === 0) continue;
+    any = true;
+
+    var cdiv = document.createElement("div");
+    cdiv.className = "qcat";
+
+    var hdr = document.createElement("div");
+    hdr.className = "qcat-name";
+    hdr.textContent = cat.name + " (" + items.length + ")";
+    cdiv.appendChild(hdr);
+
+    for (var mi = 0; mi < items.length; mi++) {
+      var row = document.createElement("div");
+      row.className = "qitem" + (isFirst ? " top" : "");
+      row.textContent = items[mi];
+      cdiv.appendChild(row);
+      isFirst = false;
+    }
+    box.appendChild(cdiv);
+  }
+
+  if (!any) {
+    box.innerHTML = '<div style="padding:16px;text-align:center;color:#aaa">Очередь пуста</div>';
+  }
+}
+
+function renderGroups() {
+  var container = document.getElementById("groups");
+  container.innerHTML = "";
+
+  for (var gi = 0; gi < GROUP_DEFS.length; gi++) {
+    var gd = GROUP_DEFS[gi];
+    var items = state.groups[gd.key];
+
+    var section = document.createElement("div");
+    section.className = "grp";
+
+    var hdr = document.createElement("div");
+    hdr.className = "grp-hdr " + gd.css;
+    hdr.innerHTML = "<span>" + esc(gd.label) + "</span><span class=\"cnt\">" + items.length + "</span>";
+
+    var body = document.createElement("div");
+    body.className = "grp-body" + (items.length === 0 ? " hidden" : "");
+
+    // closure for toggle
+    (function(b) {
+      hdr.onclick = function() { b.classList.toggle("hidden"); };
+    })(body);
+
+    for (var ti = 0; ti < items.length; ti++) {
+      var tag = document.createElement("span");
+      tag.className = "gtag";
+      tag.appendChild(document.createTextNode(items[ti] + " "));
+
+      var btn = document.createElement("button");
+      btn.className = "rb";
+      btn.textContent = "\u00d7";   // ×
+      btn.title = "Вернуть в очередь";
+
+      // closure for return
+      (function(marker, groupKey) {
+        btn.onclick = function(e) { e.stopPropagation(); returnMarker(marker, groupKey); };
+      })(items[ti], gd.key);
+
+      tag.appendChild(btn);
+      body.appendChild(tag);
+    }
+
+    section.appendChild(hdr);
+    section.appendChild(body);
+    container.appendChild(section);
+  }
+}
+
+/* ================================================================
+   YAML EXPORT
+   ================================================================ */
+
+function yamlEsc(s) {
+  return s.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
+}
+
+function generateYAML() {
+  var lines = [];
+
+  // chosen_profession
+  var prof = getChosenProfession();
+  lines.push('chosen_profession: "' + yamlEsc(prof) + '"');
+  lines.push("");
+
+  for (var i = 0; i < GROUP_DEFS.length; i++) {
+    var gd = GROUP_DEFS[i];
+    if (!gd.yaml) continue;                    // skip notcount
+    var items = state.groups[gd.key];
+    if (items.length === 0) {
+      lines.push(gd.yaml + ": []");
+    } else {
+      lines.push(gd.yaml + ":");
+      for (var j = 0; j < items.length; j++) {
+        lines.push('  - "' + yamlEsc(items[j]) + '"');
+      }
+    }
+    lines.push("");                             // blank separator
+  }
+  while (lines.length && lines[lines.length - 1] === "") lines.pop();
+  return lines.join("\n") + "\n";
+}
+
+function exportYAML() {
+  var txt = generateYAML();
+  var blob = new Blob([txt], { type: "text/yaml" });
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "markers.yaml";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ================================================================
+   UI HANDLERS
+   ================================================================ */
+
+function toggleHelp() {
+  document.getElementById("helpModal").classList.toggle("open");
+}
+
+function toggleQueue() {
+  queueOpen = !queueOpen;
+  document.getElementById("queue").classList.toggle("collapsed", !queueOpen);
+  document.getElementById("queueTgl").textContent = queueOpen ? "\u25bc" : "\u25b6";
+}
+
+function resetAll() {
+  if (!confirm("Сбросить все изменения? Распределение маркеров будет потеряно.")) return;
+  localStorage.removeItem("markers_maker_v1");
+  initState();
+  render();
+}
+
+/* ================================================================
+   PROFESSION SELECTOR
+   ================================================================ */
+
+function getChosenProfession() {
+  var sel = document.getElementById("professionSelect");
+  if (sel.value === "other") {
+    var custom = document.getElementById("professionCustom").value.trim();
+    return custom || "other";
+  }
+  return sel.value;
+}
+
+function onProfessionChange() {
+  var sel = document.getElementById("professionSelect");
+  var customInput = document.getElementById("professionCustom");
+  if (sel.value === "other") {
+    customInput.classList.add("visible");
+    customInput.focus();
+  } else {
+    customInput.classList.remove("visible");
+    customInput.value = "";
+  }
+  saveProfession();
+}
+
+function onProfessionCustomInput() {
+  saveProfession();
+}
+
+function saveProfession() {
+  try {
+    localStorage.setItem("markers_maker_profession", JSON.stringify({
+      select: document.getElementById("professionSelect").value,
+      custom: document.getElementById("professionCustom").value
+    }));
+  } catch (e) { /* ignore */ }
+}
+
+function loadProfession() {
+  try {
+    var raw = localStorage.getItem("markers_maker_profession");
+    if (!raw) return;
+    var d = JSON.parse(raw);
+    if (d.select) {
+      document.getElementById("professionSelect").value = d.select;
+      if (d.select === "other") {
+        document.getElementById("professionCustom").value = d.custom || "";
+        document.getElementById("professionCustom").classList.add("visible");
+      }
+    }
+  } catch (e) { /* ignore */ }
+}
+
+/* ================================================================
+   TELEGRAM MINI APP INTEGRATION
+   ================================================================ */
+
+var isTelegramWebApp = false;
+
+function initTelegramWebApp() {
+  // Detect true Mini App mode.
+  // Outside Telegram, the SDK script exists but window.Telegram.WebApp is missing.
+  if (window.Telegram && window.Telegram.WebApp) {
+    var tgApp = window.Telegram.WebApp;
+    isTelegramWebApp = true;
+
+    tgApp.ready();
+    tgApp.expand();
+
+    // IMPORTANT: do NOT override page colors from Telegram theme.
+    // We keep our own fixed light theme for readability.
+
+    // In Mini App mode: hide "Save YAML" download, show "Submit to Bot"
+    var saveBtn = document.getElementById("saveYamlBtn");
+    if (saveBtn) saveBtn.style.display = "none";
+
+    var submitBtn = document.getElementById("submitBotBtn");
+    if (submitBtn) submitBtn.classList.add("visible");
+
+    console.log("[Markers Maker] Running as Telegram Mini App");
+  } else {
+    console.log("[Markers Maker] Running in standalone browser mode");
+  }
+}
+
+function submitToBot() {
+  // Visual feedback even if sendData fails or is ignored
+  var btn = document.getElementById("submitBotBtn");
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Отправляю...";
+  }
+
+  if (!window.Telegram || !window.Telegram.WebApp) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📤 Отправить в бот";
+      // hide again (since we are not in Mini App)
+      btn.classList.remove("visible");
+    }
+    alert("Отправка доступна только внутри Telegram Mini App.\n\nОткройте страницу через кнопку в /start.");
+    return;
+  }
+
+  var yamlText = generateYAML();
+  try {
+    window.Telegram.WebApp.sendData(yamlText);
+    // Telegram does not show anything automatically; close the webapp for clarity
+    window.Telegram.WebApp.close();
+  } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "📤 Отправить в бот";
+    }
+    alert("Ошибка отправки: " + e.message);
+  }
+}
+
+/* ================================================================
+   INIT
+   ================================================================ */
+if (!loadState()) initState();
+loadProfession();
+initTelegramWebApp();
+render();
+</script>
+</body>
+</html>
